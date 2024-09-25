@@ -12,5 +12,5 @@ func checkAuth(proxyAuthorizationToken string) (err error) {
 }
 
 func allowRequest(request *ProxyHTTPRequest) (err error) {
-	return nil
+	return fmt.Errorf("haha no")
 }

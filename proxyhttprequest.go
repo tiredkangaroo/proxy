@@ -1,22 +1,32 @@
 package main
 
 import (
+	"context"
 	"net/http"
 	"net/url"
 	"time"
 )
 
+type User struct {
+	Username string
+	Password string
+}
+
 type ProxyHTTPRequest struct {
 	ID                 string
-	HTTP               string
-	Method             string
-	Host               string
-	URL                *url.URL
-	UserAgent          string
-	ProxyAuthorization string
 	ClientIP           string
+	ProxyAuthorization string
 
-	Start *time.Time
+	Method string
+	Host   string
+	URL    *url.URL
+
+	Error error
+	Req   *http.Request
+
+	Start      *time.Time
+	Context    context.Context
+	CancelFunc context.CancelFunc
 }
 
 // func (phr *ProxyHTTPRequest) HTTPRequest() *http.Request {
@@ -31,12 +41,15 @@ type ProxyHTTPRequest struct {
 
 func parseRequest(r *http.Request) (*ProxyHTTPRequest, error) {
 	start := time.Now()
+	ctx, cancel := context.WithCancel(r.Context())
 	return &ProxyHTTPRequest{
-		ID:                 generateTimeBasedID(start),
 		Start:              &start,
-		Host:               r.Host,
-		UserAgent:          r.UserAgent(),
-		ProxyAuthorization: r.Header.Get("Proxy-Authorization"),
+		Req:                r,
+		ID:                 generateTimeBasedID(start),
 		ClientIP:           r.RemoteAddr,
+		ProxyAuthorization: r.Header.Get("Proxy-Authorization"),
+		Host:               r.Host,
+		Context:            ctx,
+		CancelFunc:         cancel,
 	}, nil
 }

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"database/sql"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -24,7 +25,8 @@ type LoadEnvironment struct {
 
 type Environment struct {
 	LoadEnvironment
-	Client *redis.Client
+	ActiveDB *sql.DB
+	Client   *redis.Client
 }
 
 var env = new(Environment)
@@ -34,38 +36,20 @@ type CustomHandler struct{}
 func (_ CustomHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	request, err := parseRequest(r)
 	if err != nil {
-		http.Error(w, fmt.Sprintf("Malformed request."), http.StatusBadRequest)
+		fmt.Println(err.Error())
+		http.Error(w, fmt.Sprintf("Malformed request: %s.", err.Error()), http.StatusBadRequest)
 		return
 	}
 
 	err = allowRequest(request)
 	if err != nil {
-		http.Error(w, fmt.Sprintf("Request blocked by proxy: %s.", err.Error()), http.StatusForbidden)
-		return
+		request.Error = fmt.Errorf("request blocked by proxy: %s", err.Error())
 	}
-
 	if r.Method == "CONNECT" {
-		if err := connectHTTPS(w, request); err != nil {
-			logerror(request, err)
-		}
+		log(request, connectHTTPS(w, request))
 	} else {
-		r.Header.Del("Proxy-Authorization")
-		r.Header.Del("Proxy-Connection")
-		r.RequestURI = ""
-
-		request.Method = r.Method
-		request.URL = r.URL
-
-		resp, err := http.DefaultClient.Do(r)
-		w.Header().Add("X-ProxyRequest-ID", request.ID)
-		if err != nil {
-			logerror(request, err)
-			http.Error(w, "an error occured with the upstream client", 502)
-			return
-		}
-		resp.Write(w)
+		log(request, connectHTTP(w, request))
 	}
-	log(request)
 }
 
 func main() {

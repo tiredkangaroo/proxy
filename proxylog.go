@@ -2,19 +2,24 @@ package main
 
 import (
 	"log/slog"
+	"net/url"
 	"time"
 )
 
-func log(request *ProxyHTTPRequest) {
-	slog.Debug("good", "request-id", request.ID, "url", request.URL.String(), "time", time.Since(*request.Start))
+func getURL(u *url.URL) string {
+	if u == nil {
+		return "unknown"
+	} else {
+		return u.String()
+	}
 }
 
-func logerror(request *ProxyHTTPRequest, err error) {
-	var requrl string
-	if request.URL == nil {
-		requrl = "unknown"
+func log(request *ProxyHTTPRequest, err error) {
+	request.Error = err
+	request.CancelFunc()
+	if err == nil {
+		slog.Debug("OK", "request-id", request.ID, "url", getURL(request.URL), "time", time.Since(*request.Start))
 	} else {
-		requrl = request.URL.String()
+		slog.Error("BAD", "request-id", request.ID, "method", request.Method, "url", getURL(request.URL), "error", err, "time", time.Since(*request.Start))
 	}
-	slog.Error("bad", "request-id", request.ID, "method", request.Method, "url", request.URL.String(), "error", err, "time", time.Since(*request.Start))
 }

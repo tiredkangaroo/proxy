@@ -1,4 +1,4 @@
-module main
+module github.com/tiredkangaroo/proxy
 
 go 1.22.5
 
