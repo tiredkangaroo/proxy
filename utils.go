@@ -10,7 +10,6 @@ import (
 	"encoding/json"
 	"encoding/pem"
 	"fmt"
-	"log/slog"
 	"net/url"
 	"strings"
 	"time"
@@ -28,7 +27,7 @@ func generateTimeBasedID(t time.Time) string {
 	r := make([]byte, 10)
 	_, err := rand.Read(r)
 	if err != nil {
-		slog.Error("an error occured while generating a random for a time based id", "error", err.Error())
+		env.Logger.Error("an error occured while generating a random for a time based id", "error", err.Error())
 	}
 	e := base32.StdEncoding.EncodeToString(r)
 	return fmt.Sprintf("%d-%s", t.UnixMilli(), e)

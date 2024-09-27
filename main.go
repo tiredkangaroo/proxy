@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"os"
 	"strconv"
 
 	"github.com/redis/go-redis/v9"
@@ -27,6 +28,7 @@ type Environment struct {
 	LoadEnvironment
 	ActiveDB *sql.DB
 	Client   *redis.Client
+	Logger   *slog.Logger
 }
 
 var env = new(Environment)
@@ -36,15 +38,11 @@ type CustomHandler struct{}
 func (_ CustomHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	request, err := parseRequest(r)
 	if err != nil {
-		fmt.Println(err.Error())
+		env.Logger.Error("malformed request.", "error", err.Error())
 		http.Error(w, fmt.Sprintf("Malformed request: %s.", err.Error()), http.StatusBadRequest)
 		return
 	}
 
-	err = allowRequest(request)
-	if err != nil {
-		request.Error = fmt.Errorf("request blocked by proxy: %s", err.Error())
-	}
 	if r.Method == "CONNECT" {
 		log(request, connectHTTPS(w, request))
 	} else {
@@ -53,12 +51,12 @@ func (_ CustomHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
-	slog.SetLogLoggerLevel(slog.LevelDebug)
+	env.Logger = slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelDebug}))
 
 	loadedenv := new(LoadEnvironment)
 	err := loadenv.Unmarshal(loadedenv)
 	if err != nil {
-		slog.Error(err.Error())
+		env.Logger.Error(err.Error())
 		return
 	}
 	env.LoadEnvironment = *loadedenv

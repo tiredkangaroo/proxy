@@ -1,7 +1,7 @@
 package main
 
 import (
-	"log/slog"
+	"fmt"
 	"net/url"
 	"time"
 )
@@ -18,8 +18,9 @@ func log(request *ProxyHTTPRequest, err error) {
 	request.Error = err
 	request.CancelFunc()
 	if err == nil {
-		slog.Debug("OK", "request-id", request.ID, "url", getURL(request.URL), "time", time.Since(*request.Start))
+		env.Logger.Debug("OK", "request-id", request.ID, "url", getURL(request.URL), "time", time.Since(*request.Start))
+		fmt.Println(string(request.RawHTTPRequest))
 	} else {
-		slog.Error("BAD", "request-id", request.ID, "method", request.Method, "url", getURL(request.URL), "error", err, "time", time.Since(*request.Start))
+		env.Logger.Error("BAD", "request-id", request.ID, "method", request.Method, "url", getURL(request.URL), "error", err, "time", time.Since(*request.Start))
 	}
 }

@@ -16,6 +16,7 @@ type ProxyHTTPRequest struct {
 	ID                 string
 	ClientIP           string
 	ProxyAuthorization string
+	RawHTTPRequest     []byte
 
 	Method string
 	Host   string

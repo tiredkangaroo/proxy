@@ -8,6 +8,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/http/httputil"
 )
 
 // completeClientRequest fulfills HTTPS clients with the original request.
@@ -56,6 +57,7 @@ func completeClientRequest(request *ProxyHTTPRequest, client net.Conn) error {
 
 	request.URL = newURL
 
+	request.RawHTTPRequest, _ = httputil.DumpRequest(req, true)
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		log(request, err)
@@ -109,6 +111,7 @@ func connectHTTP(w http.ResponseWriter, request *ProxyHTTPRequest) error {
 
 	request.Method = r.Method
 	request.URL = r.URL
+	request.RawHTTPRequest, _ = httputil.DumpRequest(r, true)
 
 	resp, err := http.DefaultClient.Do(r)
 	w.Header().Add("X-ProxyRequest-ID", request.ID)
