@@ -6,7 +6,9 @@ import (
 	"time"
 )
 
-func getFromCache(ctx context.Context, host string) (tls.Certificate, error) {
+// getTLSCertFromCache retrieves a marshalled tls.Certificate for the host specified
+// from redis cache and returns it as a tls.Certificate.
+func getTLSCertFromCache(ctx context.Context, host string) (tls.Certificate, error) {
 	resp := env.Client.HGet(ctx, "proxycerts", host)
 
 	if resp.Err() != nil {
@@ -21,6 +23,8 @@ func getFromCache(ctx context.Context, host string) (tls.Certificate, error) {
 	return cert, nil
 }
 
+// setTLSCertToCache marshalls the tls.Certificate specified and writes to cache to be retrieves
+// by host (key: host, value: cert).
 func setTLSCertToCache(ctx context.Context, host string, tlscert tls.Certificate) {
 	data, err := marshalTLSCertificate(tlscert)
 	if err != nil {

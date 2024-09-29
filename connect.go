@@ -2,124 +2,113 @@ package main
 
 import (
 	"bufio"
-	"context"
-	"crypto/tls"
 	"fmt"
 	"io"
 	"net"
 	"net/http"
 	"net/http/httputil"
+	"time"
 )
 
 // completeClientRequest fulfills HTTPS clients with the original request.
 func completeClientRequest(request *ProxyHTTPRequest, client net.Conn) error {
-	host, _, err := net.SplitHostPort(request.Host)
-	if err != nil {
-		return fmt.Errorf("an error occured while parsing the host: %s", err.Error())
-	}
-
-	tlsCert, err := getTLSKeyPair(host, env.CACERT, env.CAKEY)
+	// get a TLS Certificate for the host (either from cache or create a new one)
+	tlsCert, err := getTLSKeyPair(request, env.CACERT, env.CAKEY)
 	if err != nil {
 		return err
 	}
 
-	tlsConfig := &tls.Config{
-		PreferServerCipherSuites: true,
-		CurvePreferences:         []tls.CurveID{tls.X25519, tls.CurveP256},
-		MinVersion:               tls.VersionTLS10,
-		MaxVersion:               tls.VersionTLS13,
-		Certificates:             []tls.Certificate{tlsCert},
-	}
-	serverWithNewTLS := tls.Server(client, tlsConfig)
-	defer serverWithNewTLS.Close()
+	// get a TLS connection with client as if this proxy was the original site to connect to
+	conn := addTLSToConnection(tlsCert, client)
+	defer conn.Close()
 
-	creader := bufio.NewReader(serverWithNewTLS)
+	// read the connection
+	creader := bufio.NewReader(conn)
 
-	if request.Error != nil {
-		serverWithNewTLS.Write([]byte(fmt.Sprintf("HTTP/1.1 403 Forbidden\nX-Proxyrequest-Id: %s\nContent-Length: %d\n\n%s", request.ID, len(request.Error.Error()), request.Error.Error())))
-		return request.Error
-	}
-
+	// parse HTTP request out of connection
 	req, err := http.ReadRequest(creader)
 	if err == io.EOF { // connection broken
 		return nil
 	} else if err != nil {
 		return fmt.Errorf("an error occured reading the http request tls connection with client: %s", err.Error())
 	}
-	request.Method = req.Method
+
 	// prepare for sending request
 	newURL := toURL(request.Host)
 	newURL.Path = req.URL.Path
 	newURL.RawQuery = req.URL.RawQuery
-
 	req.URL = newURL
 	req.RequestURI = ""
 
+	// set information about request
+	request.Method = req.Method
 	request.URL = newURL
 
+	// dump the request with body
 	request.RawHTTPRequest, _ = httputil.DumpRequest(req, true)
+
+	// do the request
+	upstreamStart := time.Now()
 	resp, err := http.DefaultClient.Do(req)
+	request.UpstreamResponseTime = time.Since(upstreamStart)
+
 	if err != nil {
 		log(request, err)
 		return fmt.Errorf("an error occured while doing the request: %s", err.Error())
 	}
+
+	// add proxy request id
 	resp.Header.Add("X-ProxyRequest-ID", request.ID)
 
+	if env.LogInfo.RawHTTPResponse { // checking here instead of at logging because RawHTTP takes a lot of memory
+		request.RawHTTPResponse, _ = httputil.DumpResponse(resp, env.LogInfo.RawHTTPResponseWithBody)
+	}
 	defer resp.Body.Close()
-	resp.Write(serverWithNewTLS)
+	resp.Write(conn)
 	return nil
-}
-
-// getTLSKeyPair returns a TLS Key Pair either from cache based on the host or generates
-// a new one if the cache is unavailable or does not have it stored. It will automatically
-// cache the certificate afterwards if possible.
-func getTLSKeyPair(host string, cacert string, cakey string) (tls.Certificate, error) {
-	ctx := context.Background()
-
-	// get from cache
-	if tlscert, err := getFromCache(ctx, host); err == nil {
-		// found cert in cache
-		return tlscert, nil
-	}
-
-	// make tls certificate (not cached or cache not available)
-	cert, key, err := generateMITMCertificate(host, cacert, cakey)
-	if err != nil {
-		return tls.Certificate{}, err
-	}
-
-	tlsCert, err := tls.X509KeyPair(cert, key)
-	if err != nil {
-		return tls.Certificate{}, fmt.Errorf("an error occured parsing the public private key pair: %s", err.Error())
-	}
-
-	go setTLSCertToCache(ctx, host, tlsCert)
-	return tlsCert, nil
 }
 
 // connectHTTP proxies HTTP requests. It is meant to handle all methods except
 // CONNECT requests.
-func connectHTTP(w http.ResponseWriter, request *ProxyHTTPRequest) error {
-	if request.Error != nil {
-		http.Error(w, request.Error.Error(), http.StatusBadRequest)
-	}
-
-	r := request.Req
+func connectHTTP(w http.ResponseWriter, r *http.Request, request *ProxyHTTPRequest) error {
+	// remove proxy info
 	r.Header.Del("Proxy-Authorization")
 	r.Header.Del("Proxy-Connection")
 	r.RequestURI = ""
 
+	// infomation for logging
 	request.Method = r.Method
 	request.URL = r.URL
-	request.RawHTTPRequest, _ = httputil.DumpRequest(r, true)
 
+	if env.LogInfo.RawHTTPRequest { // checking here instead of at logging because RawHTTP takes a lot of memory
+		request.RawHTTPRequest, _ = httputil.DumpRequest(r, env.LogInfo.RawHTTPRequestWithBody)
+	}
+
+	// do the request
+	upstreamStart := time.Now()
 	resp, err := http.DefaultClient.Do(r)
-	w.Header().Add("X-ProxyRequest-ID", request.ID)
+	request.UpstreamResponseTime = time.Since(upstreamStart)
 	if err != nil {
 		http.Error(w, "an error occured with the upstream client", 502)
 		return err
 	}
-	resp.Write(w)
+
+	if env.LogInfo.RawHTTPResponse { // checking here instead of at logging because RawHTTP takes a lot of memory
+		request.RawHTTPResponse, _ = httputil.DumpResponse(resp, env.LogInfo.RawHTTPResponseWithBody)
+	}
+
+	// insert proxy request id
+	resp.Header.Add("X-ProxyRequest-ID", request.ID)
+
+	// hijack because http by default decides to send headers for no reason
+	conn, err := hijack(w)
+	if err != nil {
+		http.Error(w, "an error occured with the hijacking of the http connection", 400)
+		return err
+	}
+	defer conn.Close()
+
+	resp.Write(conn)
 	return nil
 }
 
@@ -128,13 +117,7 @@ func connectHTTP(w http.ResponseWriter, request *ProxyHTTPRequest) error {
 func connectHTTPS(w http.ResponseWriter, request *ProxyHTTPRequest) error {
 	// request is ok (can't write Headers after hijacking)
 	w.WriteHeader(http.StatusOK)
-	hijacker, ok := w.(http.Hijacker)
-	if !ok {
-		return fmt.Errorf("hijacking failed")
-	}
-	// hijacking so we can directly write the intended server to connect to
-	// to the client
-	conn, _, err := hijacker.Hijack()
+	conn, err := hijack(w)
 	if err != nil {
 		return err
 	}

@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
-	"os"
 	"strconv"
 
 	"github.com/redis/go-redis/v9"
@@ -22,12 +21,16 @@ type LoadEnvironment struct {
 	REDISUSERNAME string
 	REDISPASSWORD string
 	REDISDB       string
+	POSTGRESURI   string
+	DEBUG         bool
+	RAWLOGINFO    string `required:"false"`
 }
 
 type Environment struct {
 	LoadEnvironment
 	ActiveDB *sql.DB
 	Client   *redis.Client
+	LogInfo  *LogInfo
 	Logger   *slog.Logger
 }
 
@@ -46,12 +49,13 @@ func (_ CustomHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if r.Method == "CONNECT" {
 		log(request, connectHTTPS(w, request))
 	} else {
-		log(request, connectHTTP(w, request))
+		log(request, connectHTTP(w, r, request))
 	}
 }
 
 func main() {
-	env.Logger = slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelDebug}))
+	slog.SetLogLoggerLevel(slog.LevelDebug)
+	env.Logger = slog.Default()
 
 	loadedenv := new(LoadEnvironment)
 	err := loadenv.Unmarshal(loadedenv)
@@ -60,6 +64,7 @@ func main() {
 		return
 	}
 	env.LoadEnvironment = *loadedenv
+	env.LogInfo = parseLogInfo(env.RAWLOGINFO)
 
 	db, _ := strconv.Atoi(env.REDISDB)
 	env.Client = redis.NewClient(&redis.Options{
@@ -70,6 +75,13 @@ func main() {
 		DB:       db,
 	})
 
+	err = initalizeDB()
+	if err != nil {
+		env.Logger.Error(err.Error())
+		return
+	}
+
+	go startAPI()
 	handler := new(CustomHandler)
 	http.ListenAndServe(":8000", handler)
 }

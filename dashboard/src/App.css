@@ -1,0 +1,21 @@
+table {
+    font-family: arial, sans-serif;
+    border-collapse: collapse;
+    width: 100%;
+}
+/*
+td,
+th {
+    border: 1px solid #dddddd;
+    text-align: left;
+    padding: 8px;
+    margin-right: 3px;
+    max-width: calc(1 / 12%);
+} */
+
+td {
+    @apply max-w-[10vw] max-h-[9vh] text-wrap break-words mt-3 mb-3 pr-4 pt-4;
+}
+tr:nth-child(even) {
+    background-color: #dddddd;
+}

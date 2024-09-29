@@ -10,6 +10,8 @@ import (
 	"encoding/json"
 	"encoding/pem"
 	"fmt"
+	"net"
+	"net/http"
 	"net/url"
 	"strings"
 	"time"
@@ -82,4 +84,36 @@ func unmarshalTLSCertificate(data []byte) (tls.Certificate, error) {
 		Certificate: [][]byte{certblock.Bytes},
 		PrivateKey:  pk,
 	}, nil
+}
+
+func getURL(u *url.URL) string {
+	if u == nil {
+		return "unknown"
+	} else {
+		return u.String()
+	}
+}
+
+func binaryToBool(b int) bool {
+	if b == 0 {
+		return false
+	}
+	return true
+}
+
+func hijack(w any) (net.Conn, error) {
+	hijacker, ok := w.(http.Hijacker)
+	if !ok {
+		return nil, fmt.Errorf("hijacking failed: not a hijackable")
+	}
+	conn, _, err := hijacker.Hijack()
+	return conn, err
+}
+
+func slogArrayToMap(a []any) map[string]any {
+	m := make(map[string]any)
+	for i := 0; i < len(a); i += 2 {
+		m[a[i].(string)] = a[i+1]
+	}
+	return m
 }
