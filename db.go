@@ -63,6 +63,30 @@ func saveProxyRequest(values map[string]any) (err error) {
 	return
 }
 
+func scanProxyRequest(rows *sql.Rows) (map[string]interface{}, error) {
+	var id, clientIP, proxyAuthorization *string
+	var rawHTTPRequest, rawHTTPResponse *[]byte
+	var method, proxyURL, proxyError *string
+	var proxyTime, upstreamResponseTime, processingTime *int64
+	err := rows.Scan(&id, &clientIP, &proxyAuthorization, &rawHTTPRequest, &rawHTTPResponse, &method, &proxyURL, &proxyError, &proxyTime, &upstreamResponseTime, &processingTime)
+	if err != nil {
+		return map[string]interface{}{}, err
+	}
+	return map[string]interface{}{
+		"id":                   id,
+		"clientIP":             clientIP,
+		"proxyAuthorization":   proxyAuthorization,
+		"rawHTTPRequest":       rawHTTPRequest,
+		"rawHTTPResponse":      rawHTTPResponse,
+		"method":               method,
+		"url":                  proxyURL,
+		"error":                proxyError,
+		"time":                 proxyTime,
+		"processing_time":      processingTime,
+		"upstreamResponseTime": upstreamResponseTime,
+	}, nil
+}
+
 func getProxyRequests() ([]map[string]interface{}, error) {
 	rows, err := env.ActiveDB.Query(`SELECT * FROM ProxyRequest;`)
 	if err != nil {
@@ -70,29 +94,28 @@ func getProxyRequests() ([]map[string]interface{}, error) {
 	}
 	requests := []map[string]interface{}{}
 	for rows.Next() {
-		var id, clientIP, proxyAuthorization *string
-		var rawHTTPRequest, rawHTTPResponse *[]byte
-		var method, proxyURL, proxyError *string
-		var proxyTime, upstreamResponseTime, processingTime *int64
-		err := rows.Scan(&id, &clientIP, &proxyAuthorization, &rawHTTPRequest, &rawHTTPResponse, &method, &proxyURL, &proxyError, &proxyTime, &upstreamResponseTime, &processingTime)
+		pr, err := scanProxyRequest(rows)
 		if err != nil {
 			return []map[string]interface{}{}, err
 		}
-		requests = append(requests, map[string]any{
-			"id":                   id,
-			"clientIP":             clientIP,
-			"proxyAuthorization":   proxyAuthorization,
-			"rawHTTPRequest":       rawHTTPRequest,
-			"rawHTTPResponse":      rawHTTPResponse,
-			"method":               method,
-			"url":                  proxyURL,
-			"error":                proxyError,
-			"time":                 proxyTime,
-			"processing_time":      processingTime,
-			"upstreamResponseTime": upstreamResponseTime,
-		})
+		requests = append(requests, pr)
 	}
 	return requests, nil
+}
+
+func getProxyRequestByID(id string) (map[string]interface{}, error) {
+	rows, err := env.ActiveDB.Query(`SELECT * FROM ProxyRequest WHERE id=$1;`, id)
+	if err != nil {
+		return map[string]interface{}{}, err
+	}
+	for rows.Next() {
+		pr, err := scanProxyRequest(rows)
+		if err != nil {
+			return map[string]interface{}{}, err
+		}
+		return pr, nil
+	}
+	return map[string]interface{}{}, fmt.Errorf("no proxy request by id")
 }
 
 func deleteProxyRequest(id string) (err error) {

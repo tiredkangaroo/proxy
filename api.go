@@ -32,15 +32,14 @@ func startAPI() {
 		})
 	})
 
-	p := new(ProxyRequestIDInPath)
-	// Delete a specific proxy request.
-	api.Delete("/proxy-requests/{id}", p, func(c *puff.Context) {
-		err := deleteProxyRequest(p.ID)
+	// Delete all proxy requests.
+	api.Delete("/proxy-requests", nil, func(c *puff.Context) {
+		err := deleteAllProxyRequests()
 		if err != nil {
 			env.Logger.Error("API", "request-id", c.GetRequestID(), "error", err.Error())
 			c.SendResponse(puff.JSONResponse{
 				Content: map[string]any{
-					"error": fmt.Sprintf("[%s] an error occured while deleting a proxy requests", c.GetRequestID()),
+					"error": fmt.Sprintf("[%s] an error occured while deleting all proxy requests", c.GetRequestID()),
 				},
 			})
 			return
@@ -52,14 +51,29 @@ func startAPI() {
 		})
 	})
 
-	// Delete all proxy requests.
-	api.Delete("/proxy-requests", nil, func(c *puff.Context) {
-		err := deleteAllProxyRequests()
+	pg := new(ProxyRequestIDInPath)
+	// Retrieve a proxy request.
+	api.Get("/proxy-requests/{id}", pg, func(c *puff.Context) {
+		pr, err := getProxyRequestByID(pg.ID)
+		if err != nil {
+			env.Logger.Error("API", "request-id", c.GetRequestID(), "error", err.Error())
+			c.InternalServerError("[%s] an error occured while getting proxy request", c.GetRequestID())
+			return
+		}
+		c.SendResponse(puff.JSONResponse{
+			Content: map[string]any{"error": nil, "data": pr},
+		})
+	})
+
+	p := new(ProxyRequestIDInPath)
+	// Delete a proxy request.
+	api.Delete("/proxy-requests/{id}", p, func(c *puff.Context) {
+		err := deleteProxyRequest(p.ID)
 		if err != nil {
 			env.Logger.Error("API", "request-id", c.GetRequestID(), "error", err.Error())
 			c.SendResponse(puff.JSONResponse{
 				Content: map[string]any{
-					"error": fmt.Sprintf("[%s] an error occured while deleting all proxy requests", c.GetRequestID()),
+					"error": fmt.Sprintf("[%s] an error occured while deleting a proxy requests", c.GetRequestID()),
 				},
 			})
 			return
