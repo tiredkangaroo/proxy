@@ -9,6 +9,8 @@ import (
 	"time"
 )
 
+// ProxyHTTPRequest represents a request routed through
+// the proxy.
 type ProxyHTTPRequest struct {
 	ID                 string
 	ClientIP           string
@@ -39,7 +41,9 @@ type ProxyHTTPRequest struct {
 // 	}
 // }
 
-func parseRequest(r *http.Request) (*ProxyHTTPRequest, error) {
+// newProxyHTTPRequest parses a new incomplete *ProxyHTTPRequest from
+// r.
+func newProxyHTTPRequest(r *http.Request) (*ProxyHTTPRequest, error) {
 	start := time.Now()
 
 	host, port, err := net.SplitHostPort(r.Host)

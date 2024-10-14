@@ -2,10 +2,10 @@ package main
 
 import (
 	"log/slog"
-	"strconv"
 	"time"
 )
 
+// LogInfo specifies information to log in the database and in the terminal.
 type LogInfo struct {
 	// If set to true, the ID will be logged in the logging system(s) used.
 	ID bool
@@ -95,8 +95,8 @@ func parseLogInfo(loginfo string) *LogInfo {
 		Time:                    true,
 		ProcessingTime:          true,
 	}
-	if loginfo == "0" {
-		return nil
+	if loginfo == "0" { // no logs
+		return &LogInfo{}
 	}
 	if len(loginfo) != 11 {
 		slog.Warn("length must be exactly 11: using default log")
@@ -104,13 +104,14 @@ func parseLogInfo(loginfo string) *LogInfo {
 	}
 	info := []bool{}
 	for _, c := range loginfo {
-		b, err := strconv.Atoi(string(c))
-		if err != nil || (b != 0 && b != 1) {
-			slog.Warn("error with Atoi or digit is not binary: using default log")
+		if c == '0' {
+			info = append(info, false)
+		} else if c == '1' {
+			info = append(info, true)
+		} else {
+			slog.Warn("error with digit: is not 0 or 1, resolving to using default log")
 			return defaultInfo
 		}
-		t := binaryToBool(b)
-		info = append(info, t)
 	}
 	return &LogInfo{
 		ID:                      info[0],
@@ -127,6 +128,8 @@ func parseLogInfo(loginfo string) *LogInfo {
 	}
 }
 
+// log provides a logging system for a ProxyHTTPRequest
+// while also accepting error.
 func log(request *ProxyHTTPRequest, err error) {
 	if env.LogInfo == nil {
 		return

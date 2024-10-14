@@ -13,10 +13,12 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strings"
 	"time"
 )
 
+// toURL takes in a string an makes it into a *url.URL.
 func toURL(s string) *url.URL {
 	if !strings.HasPrefix(s, "http://") && !strings.HasPrefix(s, "https://") {
 		s = "https://" + s
@@ -25,16 +27,31 @@ func toURL(s string) *url.URL {
 	return u
 }
 
-func generateTimeBasedID(t time.Time) string {
+// random16Base32Characters generates 16 random base 32 characters.
+func random16Base32Characters() (string, error) {
 	r := make([]byte, 10)
 	_, err := rand.Read(r)
 	if err != nil {
-		env.Logger.Error("an error occured while generating a random for a time based id", "error", err.Error())
+		return "", fmt.Errorf(RandomGenerationFailed, err.Error())
 	}
 	e := base32.StdEncoding.EncodeToString(r)
+	return e, nil
+}
+
+// generateTimeBasedID generates a time-based ID with 10 random bytes
+// encoded in Base32
+// in this format:
+//
+// UNIX_TIME-RandomBase32Characters
+func generateTimeBasedID(t time.Time) string {
+	e, err := random16Base32Characters()
+	if err != nil {
+		env.Logger.Error(err.Error())
+	}
 	return fmt.Sprintf("%d-%s", t.UnixMilli(), e)
 }
 
+// marshalTLSCertificate marshals a tls.Certificate into an []byte.
 func marshalTLSCertificate(cert tls.Certificate) ([]byte, error) {
 	// encode cert
 	var certPEMBuffer bytes.Buffer
@@ -56,6 +73,7 @@ func marshalTLSCertificate(cert tls.Certificate) ([]byte, error) {
 	})
 }
 
+// unmarshalTLSCertificate unmarshals data (as an []byte) into a tls.Certificate.
 func unmarshalTLSCertificate(data []byte) (tls.Certificate, error) {
 	var d map[string][]byte
 	err := json.Unmarshal(data, &d)
@@ -86,21 +104,9 @@ func unmarshalTLSCertificate(data []byte) (tls.Certificate, error) {
 	}, nil
 }
 
-func getURL(u *url.URL) string {
-	if u == nil {
-		return "unknown"
-	} else {
-		return u.String()
-	}
-}
-
-func binaryToBool(b int) bool {
-	if b == 0 {
-		return false
-	}
-	return true
-}
-
+// hijack attempts to assert w as a http.Hijacker followed
+// by using the hijacker to call the Hijack function. If the
+// assertion or hijacking fails, it returns an error.
 func hijack(w any) (net.Conn, error) {
 	hijacker, ok := w.(http.Hijacker)
 	if !ok {
@@ -110,10 +116,33 @@ func hijack(w any) (net.Conn, error) {
 	return conn, err
 }
 
+// slogArrayToMap converts a [key, value, key, value] array into
+// a {key: value, key: value} map.
 func slogArrayToMap(a []any) map[string]any {
 	m := make(map[string]any)
 	for i := 0; i < len(a); i += 2 {
 		m[a[i].(string)] = a[i+1]
 	}
 	return m
+}
+
+// fetchBlockedSites fetches all blocked sites and places them into
+// env.BlockedSites.
+func fetchBlockedSites() (err error) {
+	sites, err := getBlockedSites()
+	if err != nil {
+		return err
+	}
+	env.BlockedSites = sites
+	return nil
+}
+
+// anyRegexMatch attempts to match matcher with any of the regexes.
+func anyRegexMatch(regexes []*regexp.Regexp, matcher []byte) bool {
+	for _, regex := range regexes {
+		if regex.Match(matcher) {
+			return true
+		}
+	}
+	return false
 }

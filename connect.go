@@ -40,6 +40,12 @@ func completeClientRequest(request *ProxyHTTPRequest, client net.Conn) error {
 	req.URL = newURL
 	req.RequestURI = ""
 
+	blocked := anyRegexMatch(env.BlockedSites, []byte(req.URL.String()))
+	if blocked == true {
+		_, err := conn.Write([]byte(ProxyBlockedResponse))
+		return err
+	}
+
 	// set information about request
 	request.Method = req.Method
 	request.URL = newURL
@@ -71,6 +77,14 @@ func completeClientRequest(request *ProxyHTTPRequest, client net.Conn) error {
 // connectHTTP proxies HTTP requests. It is meant to handle all methods except
 // CONNECT requests.
 func connectHTTP(w http.ResponseWriter, r *http.Request, request *ProxyHTTPRequest) error {
+	// hijack because http by default decides to send headers for no reason
+	conn, err := hijack(w)
+	if err != nil {
+		http.Error(w, "an error occured with the hijacking of the http connection", 400)
+		return err
+	}
+	defer conn.Close()
+
 	// remove proxy info
 	r.Header.Del("Proxy-Authorization")
 	r.Header.Del("Proxy-Connection")
@@ -79,6 +93,12 @@ func connectHTTP(w http.ResponseWriter, r *http.Request, request *ProxyHTTPReque
 	// infomation for logging
 	request.Method = r.Method
 	request.URL = r.URL
+
+	blocked := anyRegexMatch(env.BlockedSites, []byte(r.URL.String()))
+	if blocked == true {
+		_, err := conn.Write([]byte(ProxyBlockedResponse))
+		return err
+	}
 
 	if env.LogInfo.RawHTTPRequest { // checking here instead of at logging because RawHTTP takes a lot of memory
 		request.RawHTTPRequest, _ = httputil.DumpRequest(r, env.LogInfo.RawHTTPRequestWithBody)
@@ -99,14 +119,6 @@ func connectHTTP(w http.ResponseWriter, r *http.Request, request *ProxyHTTPReque
 
 	// insert proxy request id
 	resp.Header.Add("X-ProxyRequest-ID", request.ID)
-
-	// hijack because http by default decides to send headers for no reason
-	conn, err := hijack(w)
-	if err != nil {
-		http.Error(w, "an error occured with the hijacking of the http connection", 400)
-		return err
-	}
-	defer conn.Close()
 
 	resp.Write(conn)
 	return nil
