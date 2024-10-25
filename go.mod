@@ -7,6 +7,7 @@ require (
 	github.com/nikumar1206/puff v0.0.0-20240901194108-fe7449c3f8c9
 	github.com/redis/go-redis/v9 v9.6.1
 	github.com/tiredkangaroo/loadenv v0.0.0-20240831160258-c9c73f452bdd
+	golang.org/x/sync v0.8.0
 )
 
 require (

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
@@ -12,8 +13,59 @@ import (
 	"math/big"
 	"net"
 	"os"
+	"sync"
 	"time"
+
+	"golang.org/x/sync/singleflight"
 )
+
+type CertificateService struct {
+	certificates map[string]*tls.Certificate
+	mx           sync.RWMutex
+	sfgroup      singleflight.Group
+}
+
+func NewCertificateService() *CertificateService {
+	return &CertificateService{
+		certificates: make(map[string]*tls.Certificate),
+		mx:           sync.RWMutex{},
+		sfgroup:      singleflight.Group{},
+	}
+}
+
+// getTLSKeyPair returns a TLS Key Pair either from cache based on the host or generates
+// a new one if the cache is unavailable or does not have it stored. It will automatically
+// cache the certificate afterwards if possible.
+func (cs *CertificateService) getTLSKeyPair(ctx context.Context, host string, cacert string, cakey string) (*tls.Certificate, error) {
+	// retrieve from cache
+	if tlscert, err := cs.getTLSCertFromCache(ctx, host); err == nil { // cache hit
+		return tlscert, nil
+	}
+
+	// cache miss; generate a certificate key pair and create a tls.Certificate out of the pair
+	certResponse, err, _ := cs.sfgroup.Do(host, func() (interface{}, error) {
+		// make tls certificate (not cached or cache not available)
+		cert, key, err := generateCertificate(host, cacert, cakey)
+		if err != nil {
+			return nil, err
+		}
+		// create key pair
+		tlsCert, err := tls.X509KeyPair(cert, key)
+		if err != nil {
+			return nil, fmt.Errorf("an error occured parsing the public private key pair: %s", err.Error())
+		}
+		return &tlsCert, nil
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	tlsCert := certResponse.(*tls.Certificate)
+
+	go cs.setTLSCertToCache(ctx, host, tlsCert)
+	return tlsCert, nil
+}
 
 // generateCertificate generates a certificate for the specified host signed by the CA Certificate and Key written
 // in the files specified. It expects PEM encoded x509 certificates and PKCS8 private keys in the files.
@@ -80,53 +132,27 @@ func generateCertificate(host string, caCertFilename string, caKeyFilename strin
 	// encode certificate and private key
 	pemCert := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: cert})
 	if pemCert == nil {
-		return []byte{}, []byte{}, fmt.Errorf("an error occured while attempting to encode the pem cert to memory: %s", err.Error())
+		return []byte{}, []byte{}, fmt.Errorf("an unknown error occured while attempting to encode the pem cert to memory")
 	}
 	privBytes, err := x509.MarshalPKCS8PrivateKey(pk)
 	if err != nil {
 		return []byte{}, []byte{}, fmt.Errorf("an error occured while attempting to marshal the private key: %s", err.Error())
 	}
 	pemKey := pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: privBytes})
-	if pemCert == nil {
-		return []byte{}, []byte{}, fmt.Errorf("an error occured while attempting to encode the private key to pem memory cert: %s", err.Error())
+	if pemKey == nil {
+		return []byte{}, []byte{}, fmt.Errorf("an unknown error occured while attempting to encode the private key to pem memory cert")
 	}
 
 	return pemCert, pemKey, nil
 }
 
-// getTLSKeyPair returns a TLS Key Pair either from cache based on the host or generates
-// a new one if the cache is unavailable or does not have it stored. It will automatically
-// cache the certificate afterwards if possible.
-func getTLSKeyPair(request *ProxyHTTPRequest, cacert string, cakey string) (tls.Certificate, error) {
-	// retrieve from cache
-	if tlscert, err := getTLSCertFromCache(request.Context, request.Host); err == nil {
-		// found cert in cache
-		return tlscert, nil
-	}
-
-	// make tls certificate (not cached or cache not available)
-	cert, key, err := generateCertificate(request.Host, cacert, cakey)
-	if err != nil {
-		return tls.Certificate{}, err
-	}
-
-	// create key pair
-	tlsCert, err := tls.X509KeyPair(cert, key)
-	if err != nil {
-		return tls.Certificate{}, fmt.Errorf("an error occured parsing the public private key pair: %s", err.Error())
-	}
-
-	go setTLSCertToCache(request.Context, request.Host, tlsCert)
-	return tlsCert, nil
-}
-
-func addTLSToConnection(cert tls.Certificate, conn net.Conn) *tls.Conn {
+func addTLSToConnection(cert *tls.Certificate, conn net.Conn) *tls.Conn {
 	tlsConfig := &tls.Config{
 		PreferServerCipherSuites: true,
 		CurvePreferences:         []tls.CurveID{tls.X25519, tls.CurveP256},
 		MinVersion:               tls.VersionTLS10,
 		MaxVersion:               tls.VersionTLS13,
-		Certificates:             []tls.Certificate{cert},
+		Certificates:             []tls.Certificate{*cert},
 	}
 	return tls.Server(conn, tlsConfig)
 }

@@ -16,5 +16,7 @@ github.com/redis/go-redis/v9 v9.6.1 h1:HHDteefn6ZkTtY5fGUE8tj8uy85AHk6zP7CpzIAM0
 github.com/redis/go-redis/v9 v9.6.1/go.mod h1:0C0c6ycQsdpVNQpxb1njEQIqkx5UcsM8FJCQLgE9+RA=
 github.com/tiredkangaroo/loadenv v0.0.0-20240831160258-c9c73f452bdd h1:Q5S6ggHkA97JSS8BduG5NIAibIEmAszK6lv64YpE3c8=
 github.com/tiredkangaroo/loadenv v0.0.0-20240831160258-c9c73f452bdd/go.mod h1:VQqxPveim5zSKA/waZotg6qqyRS5GoBnjy/64HRS9Os=
+golang.org/x/sync v0.8.0 h1:3NFvSEYkUoMifnESzZl15y791HH1qU2xm6eCJU5ZPXQ=
+golang.org/x/sync v0.8.0/go.mod h1:Czt+wKu1gCyEFDUtn0jG5QVvpJ6rzVqr5aXyt9drQfk=
 nhooyr.io/websocket v1.8.11 h1:f/qXNc2/3DpoSZkHt1DQu6rj4zGC8JmkkLkWss0MgN0=
 nhooyr.io/websocket v1.8.11/go.mod h1:rN9OFWIUwuxg4fR5tELlYC04bXYowCP9GX47ivo2l+c=

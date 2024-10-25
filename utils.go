@@ -86,12 +86,12 @@ func unmarshalTLSCertificate(data []byte) (tls.Certificate, error) {
 
 	certblock, _ := pem.Decode(cert)
 	if certblock == nil || certblock.Type != "CERTIFICATE" {
-		return tls.Certificate{}, fmt.Errorf("an error occured while attempting to decode certificate: cert provided is not a certificate", err.Error())
+		return tls.Certificate{}, fmt.Errorf("an error occured while attempting to decode certificate: cert provided is not a certificate")
 	}
 
 	keyblock, _ := pem.Decode(key)
 	if keyblock == nil {
-		return tls.Certificate{}, fmt.Errorf("an error occured while attempting to decode key: key provided is not a certificate", err.Error())
+		return tls.Certificate{}, fmt.Errorf("an error occured while attempting to decode key: key provided is not a certificate")
 	}
 	pk, err := x509.ParseECPrivateKey(keyblock.Bytes)
 	if err != nil {
@@ -145,4 +145,16 @@ func anyRegexMatch(regexes []*regexp.Regexp, matcher []byte) bool {
 		}
 	}
 	return false
+}
+
+// acquire attempts to acquire a lock with the function of the lock passed
+// in. it will close the channel once the lock has been successfully acquired.
+func acquire(lockfunc func()) chan struct{} {
+	c := make(chan struct{})
+	go func() {
+		lockfunc()
+		c <- struct{}{}
+		close(c)
+	}()
+	return c
 }

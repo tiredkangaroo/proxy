@@ -13,7 +13,7 @@ import (
 // completeClientRequest fulfills HTTPS clients with the original request.
 func completeClientRequest(request *ProxyHTTPRequest, client net.Conn) error {
 	// get a TLS Certificate for the host (either from cache or create a new one)
-	tlsCert, err := getTLSKeyPair(request, env.CACERT, env.CAKEY)
+	tlsCert, err := env.CertificateService.getTLSKeyPair(request.Context, request.Host, env.CACERT, env.CAKEY)
 	if err != nil {
 		return err
 	}
@@ -40,18 +40,19 @@ func completeClientRequest(request *ProxyHTTPRequest, client net.Conn) error {
 	req.URL = newURL
 	req.RequestURI = ""
 
-	blocked := anyRegexMatch(env.BlockedSites, []byte(req.URL.String()))
-	if blocked == true {
-		_, err := conn.Write([]byte(ProxyBlockedResponse))
-		return err
-	}
-
 	// set information about request
 	request.Method = req.Method
 	request.URL = newURL
 
-	// dump the request with body
-	request.RawHTTPRequest, _ = httputil.DumpRequest(req, true)
+	if env.LogInfo.RawHTTPRequest {
+		// dump the request with body
+		request.RawHTTPRequest, _ = httputil.DumpRequest(req, true)
+	}
+
+	if request.blocked() {
+		_, err := conn.Write([]byte(ProxyBlockedResponse))
+		return err
+	}
 
 	// do the request
 	upstreamStart := time.Now()
@@ -94,8 +95,7 @@ func connectHTTP(w http.ResponseWriter, r *http.Request, request *ProxyHTTPReque
 	request.Method = r.Method
 	request.URL = r.URL
 
-	blocked := anyRegexMatch(env.BlockedSites, []byte(r.URL.String()))
-	if blocked == true {
+	if request.blocked() {
 		_, err := conn.Write([]byte(ProxyBlockedResponse))
 		return err
 	}

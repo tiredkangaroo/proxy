@@ -31,16 +31,6 @@ type ProxyHTTPRequest struct {
 	Context              context.Context
 }
 
-// func (phr *ProxyHTTPRequest) HTTPRequest() *http.Request {
-// 	return &http.Request{
-// 		Method: phr.Method,
-// 		URL:    phr.Host,
-// 		Header: http.Header{
-// 			"User-Agent": []string{phr.UserAgent},
-// 		},
-// 	}
-// }
-
 // newProxyHTTPRequest parses a new incomplete *ProxyHTTPRequest from
 // r.
 func newProxyHTTPRequest(r *http.Request) (*ProxyHTTPRequest, error) {

@@ -136,16 +136,18 @@ func log(request *ProxyHTTPRequest, err error) {
 	}
 	request.Error = err
 	a := generateLogArgs(request, env.LogInfo)
-	go func() {
-		err := saveProxyRequest(slogArrayToMap(a))
-		if err != nil {
-			slog.Error("saving proxy request", "error", err)
+	if len(a) != 0 {
+		go func() {
+			err := saveProxyRequest(slogArrayToMap(a))
+			if err != nil {
+				slog.Error("saving proxy request", "error", err.Error())
+			}
+		}()
+		if err == nil {
+			env.Logger.Debug("PROXY REQUEST", a...)
+		} else {
+			env.Logger.Error("PROXY REQUEST", a...)
 		}
-	}()
-
-	if err == nil {
-		env.Logger.Debug("PROXY REQUEST", a...)
-	} else {
-		env.Logger.Error("PROXY REQUEST", a...)
 	}
+
 }
