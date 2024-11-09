@@ -116,7 +116,7 @@ func generateCertificate(host string, caCertFilename string, caKeyFilename strin
 			Organization: []string{"N/A"},
 		},
 		DNSNames:              []string{host},
-		NotBefore:             time.Now(),
+		NotBefore:             time.Now().Add(-(time.Hour * 7200)),
 		NotAfter:              time.Now().Add(time.Hour * 7200),
 		KeyUsage:              x509.KeyUsageDigitalSignature,
 		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth, x509.ExtKeyUsageClientAuth},

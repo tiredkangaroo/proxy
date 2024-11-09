@@ -4,38 +4,23 @@ import (
 	"context"
 	"net"
 	"net/http"
-	"net/url"
 	"strings"
-	"time"
 )
 
 // ProxyHTTPRequest represents a request routed through
 // the proxy.
 type ProxyHTTPRequest struct {
-	ID                 string
-	ClientIP           string
-	ProxyAuthorization string
-	RawHTTPRequest     []byte
-	RawHTTPResponse    []byte
+	Host    string
+	Port    string
+	Req     *http.Request
+	Context context.Context
 
-	Method string
-	Host   string
-	Port   string
-	URL    *url.URL
-
-	Error error
-	Req   *http.Request
-
-	Start                *time.Time
-	UpstreamResponseTime time.Duration
-	Context              context.Context
+	conn net.Conn
 }
 
 // newProxyHTTPRequest parses a new incomplete *ProxyHTTPRequest from
 // r.
-func newProxyHTTPRequest(r *http.Request) (*ProxyHTTPRequest, error) {
-	start := time.Now()
-
+func newProxyHTTPRequest(w http.ResponseWriter, r *http.Request) (*ProxyHTTPRequest, error) {
 	host, port, err := net.SplitHostPort(r.Host)
 	if err != nil {
 		if strings.Contains(err.Error(), "missing port in address") {
@@ -50,14 +35,17 @@ func newProxyHTTPRequest(r *http.Request) (*ProxyHTTPRequest, error) {
 		}
 	}
 
+	w.WriteHeader(200)
+	conn, err := hijack(w)
+	if err != nil {
+		return nil, err
+	}
+
 	return &ProxyHTTPRequest{
-		Start:              &start,
-		Req:                r,
-		ID:                 generateTimeBasedID(start),
-		ClientIP:           r.RemoteAddr,
-		ProxyAuthorization: r.Header.Get("Proxy-Authorization"),
-		Host:               host,
-		Port:               port,
-		Context:            r.Context(),
+		Req:     r,
+		Host:    host,
+		Port:    port,
+		Context: r.Context(),
+		conn:    conn,
 	}, nil
 }
