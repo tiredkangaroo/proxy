@@ -5,7 +5,6 @@ import (
 	"log/slog"
 	"os"
 
-	"github.com/redis/go-redis/v9"
 	"github.com/tiredkangaroo/loadenv"
 )
 
@@ -25,7 +24,6 @@ type LoadEnvironment struct {
 type Environment struct {
 	LoadEnvironment
 	ActiveDB           *sql.DB
-	Client             *redis.Client
 	Logger             *slog.Logger
 	CertificateService *CertificateService
 }
