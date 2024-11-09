@@ -6,9 +6,27 @@ import (
 	"net/http"
 )
 
+// ResponseHandler defines an interface of an extension that
+// handles response for the proxy.
 type ResponseHandler interface {
+	// Start
 	Start() error
 	Handle(*http.Request, net.Conn) (*http.Response, error)
+}
+
+// DefaultResponseHandler is an implementation of ResponseHandler.
+type DefaultResponseHandler struct {
+}
+
+// Start is an implementation of ResponseHandler Start function.
+func (_ *DefaultResponseHandler) Start() error {
+	return nil
+}
+
+// Handle is an implementation of ResponseHandler's Handle function. This implementation is
+// equivlent to calling http.DefaultClient.Do, while passing in req.
+func (_ *DefaultResponseHandler) Handle(req *http.Request, _ net.Conn) (*http.Response, error) {
+	return http.DefaultClient.Do(req)
 }
 
 // handle fulfills HTTP and HTTPS client requests by recieving the
