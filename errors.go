@@ -10,4 +10,10 @@ const (
 		"\r\n" +
 		"<h1>Request Blocked</h1>\r\n" +
 		"<pre>This request has been blocked by the proxy.</pre>\r\n"
+	InternalServerErrorHTML     string = "<html><body><h1>Internal Server Error</h1><pre>%s</pre></body></html>"
+	InternalServerErrorResponse string = "HTTP/1.1 500 Internal Server Error\r\n" +
+		"Content-Type: text/html\r\n" +
+		"Content-Length: %d\r\n" +
+		"\r\n" +
+		"%s"
 )

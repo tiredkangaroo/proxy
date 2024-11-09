@@ -20,6 +20,9 @@ func hijack(w any) (net.Conn, error) {
 	return conn, err
 }
 
+// toURL takes in a string and parses it using url.Parse.
+// If the the original string did not specify the http/https prefix,
+// it adds it before parsing, allowing the parse to be valid.
 func toURL(s string) (*url.URL, error) {
 	// prepare for sending request
 	if !strings.HasPrefix(s, "http://") && !strings.HasPrefix(s, "https://") {

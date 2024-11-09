@@ -6,7 +6,11 @@ import (
 	"net/http"
 )
 
-// completeClientRequest fulfills HTTPS clients with the original request.
+// handle fulfills HTTP and HTTPS client requests by recieving the
+// HTTP request, requesting the original host server, and writing
+// it back to the connection. The connection refers to the original
+// HTTP connection for HTTP clients and refers to the post-CONNECT
+// request and after establishing a TLS connection.
 func (request *ProxyHTTPRequest) handle(req *http.Request) error {
 	defer request.conn.Close()
 
@@ -34,13 +38,13 @@ func (request *ProxyHTTPRequest) handle(req *http.Request) error {
 	return nil
 }
 
-// connectHTTP proxies HTTP requests. It is meant to handle all methods except
-// CONNECT requests.
+// connectHTTP handles HTTP clients. It is equivlent to calling
+// request.handle passing in the original HTTP request.
 func (request *ProxyHTTPRequest) connectHTTP() error {
 	return request.handle(request.Req)
 }
 
-// connectHTTPS proxies HTTPS requests with MITM certificates. It is meant to only
+// connectHTTPS handles HTTPS requests with MITM certificates. It is meant to only
 // handle CONNECT requests.
 func (request *ProxyHTTPRequest) connectHTTPS() error {
 	// get a TLS Certificate for the host (either from cache or create a new one)

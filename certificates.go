@@ -19,12 +19,16 @@ import (
 	"golang.org/x/sync/singleflight"
 )
 
+// CertificateService represents a service that handles
+// gettings certificates and the handling of the caching of
+// certificates.
 type CertificateService struct {
 	certificates map[string]*tls.Certificate
 	mx           sync.RWMutex
 	sfgroup      singleflight.Group
 }
 
+// NewCertificateService creates a new certificate service.
 func NewCertificateService() *CertificateService {
 	return &CertificateService{
 		certificates: make(map[string]*tls.Certificate),

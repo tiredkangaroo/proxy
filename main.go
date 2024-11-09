@@ -25,12 +25,8 @@ func (_ CustomHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err != nil {
-		data := fmt.Sprintf("<html><body><h1>Internal Server Error</h1><pre>%s</pre></body></html>", err.Error())
-		response := []byte("HTTP/1.1 500 Internal Server Error\r\n" +
-			"Content-Type: text/html\r\n" +
-			fmt.Sprintf("Content-Length: %d\r\n", len(data)) +
-			"\r\n" +
-			data)
+		data := fmt.Sprintf(InternalServerErrorHTML, err.Error())
+		response := []byte(fmt.Sprintf(InternalServerErrorResponse, len(data), data))
 		request.conn.Write(response)
 	}
 }

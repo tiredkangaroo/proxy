@@ -35,7 +35,13 @@ func newProxyHTTPRequest(w http.ResponseWriter, r *http.Request) (*ProxyHTTPRequ
 		}
 	}
 
-	w.WriteHeader(200)
+	if r.Method == "CONNECT" {
+		// only for CONNECT requests because the HTTPS client expects the proxy to leave after establishing a secure connection
+		// for other method HTTP clients the proxy just does the request and sends it back, therefore writing the status code
+		// would mask the actual status code from the upstream server and could cause other errors down the line
+		w.WriteHeader(200)
+	}
+
 	conn, err := hijack(w)
 	if err != nil {
 		return nil, err

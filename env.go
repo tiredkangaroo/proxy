@@ -1,7 +1,6 @@
 package main
 
 import (
-	"database/sql"
 	"log/slog"
 	"os"
 
@@ -11,24 +10,22 @@ import (
 // LoadEnvironment represents an environment to be loaded from a
 // .env file.
 type LoadEnvironment struct {
-	CACERT     string
-	CAKEY      string
-	CERT       string
-	KEY        string
-	DEBUG      bool
-	RAWLOGINFO string `required:"false"`
+	CACERT string
+	CAKEY  string
+	CERT   string
+	KEY    string
+	DEBUG  bool
 }
 
 // Environment represents an environment with important reusable
 // slices and pointers.
 type Environment struct {
 	LoadEnvironment
-	ActiveDB           *sql.DB
 	Logger             *slog.Logger
 	CertificateService *CertificateService
 }
 
-// env provides Environment in a way to be accessed throughout
+// env provides environment in a way that can be accessed throughout
 // the entire codebase.
 var env = Environment{
 	CertificateService: NewCertificateService(),
@@ -38,7 +35,7 @@ var env = Environment{
 // with setting the crucial variables not immediately provided
 // in the configuration file.
 func load() {
-	slog.SetLogLoggerLevel(slog.LevelDebug)
+	slog.SetLogLoggerLevel(slog.LevelError)
 	env.Logger = slog.Default()
 
 	// load and initialize
@@ -48,6 +45,9 @@ func load() {
 		env.Logger.Error(err.Error())
 		os.Exit(1)
 	}
+
+	if env.DEBUG == true {
+		slog.SetLogLoggerLevel(slog.LevelDebug)
+	}
 	env.LoadEnvironment = *loadedenv
-	// env.LogInfo = parseLogInfo(env.RAWLOGINFO)
 }
