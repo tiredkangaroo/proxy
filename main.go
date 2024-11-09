@@ -35,7 +35,7 @@ func (_ CustomHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 func main() {
 	load()
-	env.ResponseHandler = &handlers.DelayHandler{}
+	env.ResponseHandler = &handlers.BlockDelayHandler{}
 	if err := env.ResponseHandler.Start(); err != nil {
 		env.Logger.Error(err.Error())
 	}

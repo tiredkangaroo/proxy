@@ -8,13 +8,16 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"regexp"
 	"strings"
 	"time"
 )
 
-// Constants defining delay durations
+// AccessBeforeDelayTime is the amount of time until another delay should occur on a host.
 const AccessBeforeDelayTime = time.Minute * 30
-const DelayTime = time.Second * 10
+
+// DelayTime is the amount of time a delay should occur for.
+const DelayTime = time.Minute * 3
 
 // Delay holds the hostname and a cached response after delay completion.
 type Delay struct {
@@ -28,25 +31,27 @@ type DelayedAccess struct {
 	hostname   string
 }
 
-// DelayHandler manages the delay logic for specific hosts.
-type DelayHandler struct {
+// BlockDelayHandler manages the delay logic for specific hosts.
+type BlockDelayHandler struct {
 	lastAccessedByClient map[string][]DelayedAccess // maps client IP to list of past delayed accesses
-	validDelays          map[string]Delay           // maps delay ID to Delay object
-	delayedHosts         []string                   // list of hosts to delay
+	validDelays          map[string]Delay           // maps delay ID to a occurance of a Delay
+	delayedHosts         []*regexp.Regexp           // list of hosts to delay
+	blockedURLs          []*regexp.Regexp           // blocked hosts
 }
 
 // Start initializes delay handling with predefined delayed hosts.
-func (dh *DelayHandler) Start() error {
+func (dh *BlockDelayHandler) Start() error {
 	dh.lastAccessedByClient = make(map[string][]DelayedAccess)
 	dh.validDelays = make(map[string]Delay)
-	dh.delayedHosts = []string{"www.youtube.com", "www.instagram.com", "www.google.com"}
+	dh.delayedHosts = []*regexp.Regexp{regexp.MustCompile(`(?i)^(https?://)?([a-z0-9-]+\.)*youtube\.com`), regexp.MustCompile(`(?i)^(https?://)?([a-z0-9-]+\.)*instagram\.com`)}
+	dh.blockedURLs = []*regexp.Regexp{regexp.MustCompile(`(?i)^(https?://)?(www\.)?youtube\.com/shorts/[^/]+$`), regexp.MustCompile(`(?i)^https?://www\.youtube\.com/@[^/]+/shorts`), regexp.MustCompile(`(?i)^https?://www\.youtube\.com/channel/[^/]+/shorts`)}
 	return nil
 }
 
 // isDelayed checks if the given hostname is in the list of delayed hosts.
-func (dh *DelayHandler) isDelayed(hostname string) bool {
+func (dh *BlockDelayHandler) isDelayed(hostname string) bool {
 	for _, delayedHost := range dh.delayedHosts {
-		if delayedHost == hostname {
+		if delayedHost.Match([]byte(hostname)) {
 			return true
 		}
 	}
@@ -54,7 +59,7 @@ func (dh *DelayHandler) isDelayed(hostname string) bool {
 }
 
 // Handle processes an HTTP request and applies delay if necessary.
-func (dh *DelayHandler) Handle(req *http.Request, conn net.Conn) (*http.Response, error) {
+func (dh *BlockDelayHandler) Handle(req *http.Request, conn net.Conn) (*http.Response, error) {
 	hostname := req.URL.Hostname()
 	clientIP := strings.Split(conn.RemoteAddr().String(), ":")[0]
 	delayID := req.URL.Query().Get("delay-id")
@@ -64,6 +69,21 @@ func (dh *DelayHandler) Handle(req *http.Request, conn net.Conn) (*http.Response
 		// Cached response found; delete it from cache and return it
 		delete(dh.validDelays, delayID)
 		return delay.response, nil
+	}
+
+	for _, blockedURL := range dh.blockedURLs {
+		if blockedURL.Match([]byte(req.Host + req.URL.Path)) {
+			return &http.Response{
+				Status:        "200 OK",
+				StatusCode:    http.StatusOK,
+				Header:        http.Header{"Content-Type": []string{"text/html"}},
+				ContentLength: 55,
+				Proto:         "HTTP/1.1",
+				ProtoMajor:    1,
+				ProtoMinor:    1,
+				Body:          io.NopCloser(bytes.NewBuffer([]byte("<h1>Blocked</h1><pre>You cannot access this page.</pre>"))),
+			}, nil
+		}
 	}
 
 	// Make request to the original host
