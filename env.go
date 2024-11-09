@@ -23,6 +23,7 @@ type Environment struct {
 	LoadEnvironment
 	Logger             *slog.Logger
 	CertificateService *CertificateService
+	ResponseHandler    ResponseHandler
 }
 
 // env provides environment in a way that can be accessed throughout
@@ -49,5 +50,6 @@ func load() {
 	if env.DEBUG == true {
 		slog.SetLogLoggerLevel(slog.LevelDebug)
 	}
+
 	env.LoadEnvironment = *loadedenv
 }

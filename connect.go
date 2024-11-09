@@ -2,9 +2,14 @@ package main
 
 import (
 	"bufio"
-	"fmt"
+	"net"
 	"net/http"
 )
+
+type ResponseHandler interface {
+	Start() error
+	Handle(*http.Request, net.Conn) (*http.Response, error)
+}
 
 // handle fulfills HTTP and HTTPS client requests by recieving the
 // HTTP request, requesting the original host server, and writing
@@ -27,15 +32,13 @@ func (request *ProxyHTTPRequest) handle(req *http.Request) error {
 	req.Header.Del("Proxy-Authorization")
 	req.Header.Del("Proxy-Connection")
 
-	resp, err := http.DefaultClient.Do(req)
-
+	resp, err := env.ResponseHandler.Handle(req, request.conn)
 	if err != nil {
-		return fmt.Errorf("an error occured while doing the request: %s", err.Error())
+		return err
 	}
 
 	defer resp.Body.Close()
-	resp.Write(request.conn)
-	return nil
+	return resp.Write(request.conn)
 }
 
 // connectHTTP handles HTTP clients. It is equivlent to calling

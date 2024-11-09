@@ -3,6 +3,8 @@ package main
 import (
 	"fmt"
 	"net/http"
+
+	"github.com/tiredkangaroo/proxy/handlers"
 )
 
 // CustomHandler provides an http.Handler in which to accept ALL request
@@ -33,7 +35,10 @@ func (_ CustomHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 func main() {
 	load()
-
+	env.ResponseHandler = &handlers.DelayHandler{}
+	if err := env.ResponseHandler.Start(); err != nil {
+		env.Logger.Error(err.Error())
+	}
 	handler := new(CustomHandler)
 	http.ListenAndServe(":8000", handler)
 }
