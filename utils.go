@@ -7,10 +7,14 @@ import (
 
 // toURL takes in a string and parses it using url.Parse. If the the original string did not specify the
 // http/https prefix, it adds it before parsing, allowing the parse to be valid.
-func toURL(s string) (*url.URL, error) {
+func toURL(s string, https bool) (*url.URL, error) {
 	// prepare for sending request
 	if !strings.HasPrefix(s, "http://") && !strings.HasPrefix(s, "https://") {
-		s = "https://" + s
+		if https {
+			s = "https://" + s
+		} else {
+			s = "http://" + s
+		}
 	}
 	return url.Parse(s)
 }

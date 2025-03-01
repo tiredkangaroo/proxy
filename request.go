@@ -12,8 +12,9 @@ import (
 
 // Request represents a request routed through the proxy.
 type Request struct {
-	id   [16]byte
-	conn net.Conn
+	id    [16]byte
+	conn  net.Conn
+	https bool
 
 	Host        string
 	Port        string
@@ -23,15 +24,20 @@ type Request struct {
 
 // newProxyHTTPRequest parses a new incomplete *ProxyHTTPRequest from r.
 func newProxyHTTPRequest(w http.ResponseWriter, r *http.Request) (*Request, error) {
+	req := &Request{
+		HttpRequest: r,
+		Context:     r.Context(),
+	}
 	// get host and port
-	host, port, err := net.SplitHostPort(r.Host)
+	var err error
+	req.Host, req.Port, err = net.SplitHostPort(r.Host)
 	if err != nil {
 		if strings.Contains(err.Error(), "missing port in address") {
-			host = r.Host
+			req.Host = r.Host
 			if r.Method == "CONNECT" {
-				port = "443"
+				req.Port = "443"
 			} else {
-				port = "80"
+				req.Port = "80"
 			}
 		} else {
 			return nil, err
@@ -50,14 +56,8 @@ func newProxyHTTPRequest(w http.ResponseWriter, r *http.Request) (*Request, erro
 	if err != nil {
 		return nil, err
 	}
+	req.conn = conn
 
-	req := &Request{
-		HttpRequest: r,
-		Host:        host,
-		Port:        port,
-		Context:     r.Context(),
-		conn:        conn,
-	}
 	// FIXME: handle rand error
 	rand.Read(req.id[:])
 

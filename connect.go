@@ -14,7 +14,7 @@ import (
 func handle(proxyreq *Request) error {
 	defer proxyreq.conn.Close()
 
-	newURL, err := toURL(proxyreq.Host)
+	newURL, err := toURL(proxyreq.Host, proxyreq.https)
 	if err != nil {
 		slog.Error("toURL", "id", proxyreq.ID(), "error", err.Error(), "host", proxyreq.Host)
 		proxyreq.conn.Write(InternalServerErrorResponse(proxyreq.ID()))
