@@ -1,4 +1,2 @@
-github.com/tiredkangaroo/loadenv v0.0.0-20240831160258-c9c73f452bdd h1:Q5S6ggHkA97JSS8BduG5NIAibIEmAszK6lv64YpE3c8=
-github.com/tiredkangaroo/loadenv v0.0.0-20240831160258-c9c73f452bdd/go.mod h1:VQqxPveim5zSKA/waZotg6qqyRS5GoBnjy/64HRS9Os=
 golang.org/x/sync v0.8.0 h1:3NFvSEYkUoMifnESzZl15y791HH1qU2xm6eCJU5ZPXQ=
 golang.org/x/sync v0.8.0/go.mod h1:Czt+wKu1gCyEFDUtn0jG5QVvpJ6rzVqr5aXyt9drQfk=

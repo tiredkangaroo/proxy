@@ -12,7 +12,6 @@ import (
 	"fmt"
 	"math/big"
 	"net"
-	"os"
 	"sync"
 	"time"
 
@@ -26,6 +25,9 @@ type CertificateService struct {
 	certificates map[string]*tls.Certificate
 	mx           sync.RWMutex
 	sfgroup      singleflight.Group
+
+	cacert *x509.Certificate
+	cakey  any
 }
 
 // NewCertificateService creates a new certificate service.
@@ -40,7 +42,7 @@ func NewCertificateService() *CertificateService {
 // getTLSKeyPair returns a TLS Key Pair either from cache based on the host or generates
 // a new one if the cache is unavailable or does not have it stored. It will automatically
 // cache the certificate afterwards if possible.
-func (cs *CertificateService) getTLSKeyPair(ctx context.Context, host string, cacert string, cakey string) (*tls.Certificate, error) {
+func (cs *CertificateService) getTLSKeyPair(ctx context.Context, host string) (*tls.Certificate, error) {
 	// retrieve from cache
 	if tlscert, err := cs.getTLSCertFromCache(ctx, host); err == nil { // cache hit
 		return tlscert, nil
@@ -49,7 +51,7 @@ func (cs *CertificateService) getTLSKeyPair(ctx context.Context, host string, ca
 	// cache miss; generate a certificate key pair and create a tls.Certificate out of the pair
 	certResponse, err, _ := cs.sfgroup.Do(host, func() (interface{}, error) {
 		// make tls certificate (not cached or cache not available)
-		cert, key, err := generateCertificate(host, cacert, cakey)
+		cert, key, err := cs.generateCertificate(host)
 		if err != nil {
 			return nil, err
 		}
@@ -73,33 +75,7 @@ func (cs *CertificateService) getTLSKeyPair(ctx context.Context, host string, ca
 
 // generateCertificate generates a certificate for the specified host signed by the CA Certificate and Key written
 // in the files specified. It expects PEM encoded x509 certificates and PKCS8 private keys in the files.
-func generateCertificate(host string, caCertFilename string, caKeyFilename string) ([]byte, []byte, error) {
-	// read certificate and key files
-	cacertbytes, err := os.ReadFile(caCertFilename)
-	if err != nil {
-		return []byte{}, []byte{}, fmt.Errorf("an error occured while attempting to read the CA Cert File: %s", err.Error())
-	}
-	cakeybytes, err := os.ReadFile(caKeyFilename)
-	if err != nil {
-		return []byte{}, []byte{}, fmt.Errorf("an error occured while attempting to read the CA Key File: %s", err.Error())
-	}
-
-	// decode them
-	certblock, _ := pem.Decode(cacertbytes)
-	cakeyblock, _ := pem.Decode(cakeybytes)
-
-	// parse x509.Certificate out of the decoded pem.Block
-	cacert, err := x509.ParseCertificate(certblock.Bytes)
-	if err != nil {
-		return []byte{}, []byte{}, fmt.Errorf("an error occured while attempting to parse the CACert: %s", err.Error())
-	}
-
-	// parse private key out of the decoded pem.Block
-	cakey, err := x509.ParsePKCS8PrivateKey(cakeyblock.Bytes)
-	if err != nil {
-		return []byte{}, []byte{}, fmt.Errorf("an error occured while attempting to read the CA Private Key: %s", err.Error())
-	}
-
+func (cs *CertificateService) generateCertificate(host string) ([]byte, []byte, error) {
 	// generate a new private key for the new certificate
 	pk, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
@@ -128,7 +104,7 @@ func generateCertificate(host string, caCertFilename string, caKeyFilename strin
 	}
 
 	// create certificate
-	cert, err := x509.CreateCertificate(rand.Reader, config, cacert, &pk.PublicKey, cakey)
+	cert, err := x509.CreateCertificate(rand.Reader, config, cs.cacert, &pk.PublicKey, cs.cakey)
 	if err != nil {
 		return []byte{}, []byte{}, fmt.Errorf("an error occured while attempting to create the x509 certificate: %s", err.Error())
 	}

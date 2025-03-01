@@ -2,74 +2,55 @@ package main
 
 import (
 	"bufio"
-	"net"
+	"log/slog"
 	"net/http"
 )
 
-// ResponseHandler defines an interface of an extension that
-// handles response for the proxy.
-type ResponseHandler interface {
-	// Start
-	Start() error
-	Handle(*http.Request, net.Conn) (*http.Response, error)
-}
+// handle fulfills the request. With HTTP clients, req is the original request
+// retrieved from the original connection to the proxy server. With HTTPS clients, req is
+// retrieved finishing the proxy-side of the connection (by writing a 200), retrieving a self-signed
+// certificate issued to the original host, establishing a TLS connection and reading from it (the request
+// originally intended).
+func handle(proxyreq *Request) error {
+	defer proxyreq.conn.Close()
 
-// DefaultResponseHandler is an implementation of ResponseHandler.
-type DefaultResponseHandler struct {
-}
-
-// Start is an implementation of ResponseHandler Start function.
-func (_ *DefaultResponseHandler) Start() error {
-	return nil
-}
-
-// Handle is an implementation of ResponseHandler's Handle function. This implementation is
-// equivlent to calling http.DefaultClient.Do, while passing in req.
-func (_ *DefaultResponseHandler) Handle(req *http.Request, _ net.Conn) (*http.Response, error) {
-	return http.DefaultClient.Do(req)
-}
-
-// handle fulfills HTTP and HTTPS client requests by recieving the
-// HTTP request, requesting the original host server, and writing
-// it back to the connection. The connection refers to the original
-// HTTP connection for HTTP clients and refers to the post-CONNECT
-// request and after establishing a TLS connection.
-func (request *ProxyHTTPRequest) handle(req *http.Request) error {
-	defer request.conn.Close()
-
-	newURL, err := toURL(req.Host)
+	newURL, err := toURL(proxyreq.Host)
 	if err != nil {
+		slog.Error("toURL", "id", proxyreq.ID(), "error", err.Error(), "host", proxyreq.Host)
+		proxyreq.conn.Write(InternalServerErrorResponse(proxyreq.ID()))
 		return err
 	}
 
-	newURL.Path = req.URL.Path
-	newURL.RawQuery = req.URL.RawQuery
+	newURL.Path = proxyreq.HttpRequest.URL.Path
+	newURL.RawQuery = proxyreq.HttpRequest.URL.RawQuery
 
-	req.URL = newURL
-	req.RequestURI = ""
-	req.Header.Del("Proxy-Authorization")
-	req.Header.Del("Proxy-Connection")
+	proxyreq.HttpRequest.URL = newURL
+	proxyreq.HttpRequest.RequestURI = ""
+	proxyreq.HttpRequest.Header.Del("Proxy-Authorization")
+	proxyreq.HttpRequest.Header.Del("Proxy-Connection")
 
-	resp, err := env.ResponseHandler.Handle(req, request.conn)
+	resp, err := http.DefaultClient.Do(proxyreq.HttpRequest)
 	if err != nil {
+		slog.Error("http request do", "id", proxyreq.ID(), "error", err.Error())
+		proxyreq.conn.Write(InternalServerErrorResponse(proxyreq.ID()))
 		return err
 	}
 
 	defer resp.Body.Close()
-	return resp.Write(request.conn)
+	return resp.Write(proxyreq.conn)
 }
 
 // connectHTTP handles HTTP clients. It is equivlent to calling
 // request.handle passing in the original HTTP request.
-func (request *ProxyHTTPRequest) connectHTTP() error {
-	return request.handle(request.Req)
+func connectHTTP(req *Request) error {
+	return handle(req)
 }
 
 // connectHTTPS handles HTTPS requests with MITM certificates. It is meant to only
 // handle CONNECT requests.
-func (request *ProxyHTTPRequest) connectHTTPS() error {
+func connectHTTPS(request *Request) error {
 	// get a TLS Certificate for the host (either from cache or create a new one)
-	tlsCert, err := env.CertificateService.getTLSKeyPair(request.Context, request.Host, env.CACERT, env.CAKEY)
+	tlsCert, err := config.CertificateService.getTLSKeyPair(request.Context, request.Host)
 	if err != nil {
 		return err
 	}
@@ -85,7 +66,8 @@ func (request *ProxyHTTPRequest) connectHTTPS() error {
 	if err != nil {
 		return err
 	}
+	request.HttpRequest = req
 
-	err = request.handle(req)
+	err = handle(request)
 	return err
 }

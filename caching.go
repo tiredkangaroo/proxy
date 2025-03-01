@@ -15,11 +15,11 @@ func (cs *CertificateService) getTLSCertFromCache(ctx context.Context, host stri
 		cs.mx.RUnlock()
 		var err error
 		if !ok {
-			err = fmt.Errorf("cache miss.")
+			err = fmt.Errorf("cache miss")
 		}
 		return cert, err
 	case <-ctx.Done():
-		return nil, fmt.Errorf("operation cancelled by context.")
+		return nil, fmt.Errorf("operation cancelled by context")
 	}
 }
 
@@ -32,6 +32,6 @@ func (cs *CertificateService) setTLSCertToCache(ctx context.Context, host string
 		cs.mx.Unlock()
 		return nil
 	case <-ctx.Done():
-		return fmt.Errorf("operation cancelled by context.")
+		return fmt.Errorf("operation cancelled by context")
 	}
 }

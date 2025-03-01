@@ -2,9 +2,9 @@ package main
 
 import (
 	"fmt"
+	"log"
+	"log/slog"
 	"net/http"
-
-	"github.com/tiredkangaroo/proxy/handlers"
 )
 
 // CustomHandler provides an http.Handler in which to accept ALL request
@@ -12,33 +12,35 @@ import (
 type CustomHandler struct{}
 
 // ServeHTTP serves the HTTP server for the proxy.
-func (_ CustomHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+func (CustomHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	request, err := newProxyHTTPRequest(w, r)
 	if err != nil {
-		env.Logger.Error("malformed request.", "error", err.Error())
-		http.Error(w, fmt.Sprintf("Malformed request: %s.", err.Error()), http.StatusBadRequest)
+		config.Logger.Error("malformed request", "error", err.Error())
+		http.Error(w, fmt.Sprintf("malformed request: %s", err.Error()), http.StatusBadRequest)
 		return
 	}
 
 	if r.Method == "CONNECT" {
-		err = request.connectHTTPS()
+		err = connectHTTPS(request)
 	} else {
-		err = request.connectHTTP()
+		err = connectHTTP(request)
 	}
 
 	if err != nil {
-		data := fmt.Sprintf(InternalServerErrorHTML, err.Error())
-		response := []byte(fmt.Sprintf(InternalServerErrorResponse, len(data), data))
-		request.conn.Write(response)
+		slog.Error("connect error", "request id", request.ID(), "err", err.Error())
+		request.conn.Write(InternalServerErrorResponse(request.ID()))
 	}
 }
 
 func main() {
-	load()
-	env.ResponseHandler = &handlers.BlockDelayHandler{}
-	if err := env.ResponseHandler.Start(); err != nil {
-		env.Logger.Error(err.Error())
+	if err := loadConfig(); err != nil {
+		log.Fatalf(err.Error())
 	}
+
+	config.Logger.Debug("starting proxy", "port", config.port)
+
 	handler := new(CustomHandler)
-	http.ListenAndServe(":8000", handler)
+	if err := http.ListenAndServe(config.port, handler); err != nil {
+		log.Fatalf(err.Error())
+	}
 }
